@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  telegram-ai-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telegram-ai-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
+      - DASHSCOPE_BASE_URL=${DASHSCOPE_BASE_URL:-https://dashscope-intl.aliyuncs.com/compatible-mode/v1}
+      - AI_MODEL=${AI_MODEL:-qwen-mt-turbo}
+      - HTTP_PORT=${HTTP_PORT:-8080}
+      - DATABASE_DSN=${DATABASE_DSN}
+    ports:
+      - "${HTTP_PORT:-8080}:${HTTP_PORT:-8080}"
+    # Optional: uncomment if you want to use .env file
+    # env_file:
+    #   - .env
+    # Optional: add volumes for logs
+    # volumes:
+    #   - ./logs:/app/logs
+    # Optional: add health check
+    # healthcheck:
+    #   test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
