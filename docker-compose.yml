@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  telegram-ai-bot:
+  qwen:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: telegram-ai-bot
+    container_name: qwen
     restart: unless-stopped
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}

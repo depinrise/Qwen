@@ -1,4 +1,6 @@
-# Telegram AI Bot dengan Qwen
+# Qwen - Natural Conversational Telegram AI Bot
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blueviolet.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 Bot Telegram sederhana yang menggunakan model AI Qwen dari Alibaba Cloud untuk percakapan interaktif.
 
@@ -35,7 +37,7 @@ Bot Telegram sederhana yang menggunakan model AI Qwen dari Alibaba Cloud untuk p
 
 ```bash
 git clone <repository-url>
-cd telegram-ai-bot
+cd Qwen
 ```
 
 ### 2. Setup Environment Variables
@@ -78,7 +80,7 @@ mysql -h your-polardb-host -u username -p < setup_database.sql
 docker-compose up --build -d
 
 # Lihat logs
-docker-compose logs -f telegram-ai-bot
+docker-compose logs -f qwen
 
 # Stop bot
 docker-compose down
@@ -111,7 +113,7 @@ Interface ini menyediakan:
 ## Struktur Project
 
 ```
-telegram-ai-bot/
+Qwen/
 ├── cmd/
 │   └── main.go              # Entry point aplikasi
 ├── internal/
@@ -301,4 +303,6 @@ go build -o bot cmd/main.go
 
 ## License
 
-MIT License - lihat file LICENSE untuk detail.
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+
+See the `LICENSE` file for details.

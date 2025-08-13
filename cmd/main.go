@@ -1,16 +1,16 @@
 package main
 
 import (
+	"Qwen/internal/ai"
+	"Qwen/internal/bot"
+	"Qwen/internal/config"
+	"Qwen/internal/database"
+	"Qwen/internal/memory"
+	"Qwen/internal/server"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
-	"telegram-ai-bot/internal/ai"
-	"telegram-ai-bot/internal/bot"
-	"telegram-ai-bot/internal/config"
-	"telegram-ai-bot/internal/database"
-	"telegram-ai-bot/internal/memory"
-	"telegram-ai-bot/internal/server"
 )
 
 func main() {

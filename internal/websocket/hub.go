@@ -1,11 +1,11 @@
 package websocket
 
 import (
+	"Qwen/internal/ai"
 	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
-	"telegram-ai-bot/internal/ai"
 
 	"github.com/gorilla/websocket"
 )

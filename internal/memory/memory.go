@@ -1,13 +1,13 @@
 package memory
 
 import (
+	"Qwen/internal/ai"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
-	"telegram-ai-bot/internal/ai"
 )
 
 // MemoryService mengelola memory permanen user dengan LLM

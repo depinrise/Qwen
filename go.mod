@@ -1,4 +1,4 @@
-module telegram-ai-bot
+module Qwen
 
 go 1.21.0
 

@@ -1,10 +1,10 @@
 package server
 
 import (
+	"Qwen/internal/ai"
+	"Qwen/internal/websocket"
 	"log"
 	"net/http"
-	"telegram-ai-bot/internal/ai"
-	"telegram-ai-bot/internal/websocket"
 )
 
 type Server struct {
