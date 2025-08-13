@@ -10,8 +10,10 @@ import (
 )
 
 type Client struct {
-	client *openai.Client
-	model  string
+	client  *openai.Client
+	model   string
+	apiKey  string
+	baseURL string
 }
 
 type Message struct {
@@ -26,8 +28,10 @@ func NewClient(apiKey, baseURL, model string) *Client {
 	client := openai.NewClientWithConfig(config)
 
 	return &Client{
-		client: client,
-		model:  model,
+		client:  client,
+		model:   model,
+		apiKey:  apiKey,
+		baseURL: baseURL,
 	}
 }
 
