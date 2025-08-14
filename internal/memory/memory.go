@@ -144,7 +144,7 @@ func (m *MemoryService) ProcessMessage(userID int64, message string) (string, bo
 	messages := []ai.Message{
 		{
 			Role:    "system",
-			Content: "You are an AI assistant with persistent memory capabilities. Always respond with valid JSON format.",
+			Content: "Selalu balas dalam format JSON valid seperti yang diminta.",
 		},
 		{
 			Role:    "user",

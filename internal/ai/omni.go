@@ -90,9 +90,10 @@ func (c *Client) ChatOmni(ctx context.Context, systemPrompt string, userText str
 		}
 	}
 
-	// Optional: sampling params
-	body["temperature"] = 0.8
-	body["top_p"] = 0.95
+	// Sampling params (align with client params)
+	body["temperature"] = c.params.Temperature
+	body["top_p"] = c.params.TopP
+	body["top_k"] = c.params.TopK
 
 	payload, err := json.Marshal(body)
 	if err != nil {

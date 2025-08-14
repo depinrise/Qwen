@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/sashabaranov/go-openai"
@@ -14,6 +15,20 @@ type Client struct {
 	model   string
 	apiKey  string
 	baseURL string
+	params  ModelParams
+}
+
+// ModelParams controls sampling behavior
+type ModelParams struct {
+	Temperature float64 `json:"temperature"`
+	TopK        int     `json:"top_k"`
+	TopP        float64 `json:"top_p"`
+}
+
+var defaultParams = ModelParams{
+	Temperature: 0.75,
+	TopK:        45,
+	TopP:        0.92,
 }
 
 type Message struct {
@@ -32,10 +47,17 @@ func NewClient(apiKey, baseURL, model string) *Client {
 		model:   model,
 		apiKey:  apiKey,
 		baseURL: baseURL,
+		params:  defaultParams,
 	}
 }
 
+// SetParams allows overriding default model params at runtime
+func (c *Client) SetParams(p ModelParams) {
+	c.params = p
+}
+
 func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
+	// Use streaming collection to support models that require stream=true (e.g., qwen-omni-turbo)
 	// Convert our Message type to OpenAI's ChatCompletionMessage
 	openaiMessages := make([]openai.ChatCompletionMessage, len(messages))
 	for i, msg := range messages {
@@ -45,23 +67,43 @@ func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
 		}
 	}
 
+	// Always stream for compatibility and robustness
 	req := openai.ChatCompletionRequest{
 		Model:       c.model,
 		Messages:    openaiMessages,
-		Temperature: 0.8,  // Natural and creative responses
-		TopP:        0.95, // High diversity while maintaining quality
+		Stream:      true,
+		Temperature: float32(c.params.Temperature),
+		TopP:        float32(c.params.TopP),
 	}
 
-	resp, err := c.client.CreateChatCompletion(ctx, req)
+	stream, err := c.client.CreateChatCompletionStream(ctx, req)
 	if err != nil {
-		return "", fmt.Errorf("failed to create chat completion: %w", err)
+		// Improve error for omni models
+		if strings.Contains(strings.ToLower(err.Error()), "only support with stream=true") {
+			return "", fmt.Errorf("model requires streaming; retry later: %w", err)
+		}
+		return "", fmt.Errorf("failed to create chat completion stream: %w", err)
+	}
+	defer stream.Close()
+
+	var full string
+	for {
+		resp, err := stream.Recv()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", fmt.Errorf("stream recv error: %w", err)
+		}
+		if len(resp.Choices) > 0 {
+			full += resp.Choices[0].Delta.Content
+		}
 	}
 
-	if len(resp.Choices) == 0 {
-		return "", fmt.Errorf("no response choices returned")
+	if strings.TrimSpace(full) == "" {
+		return "", fmt.Errorf("empty response from stream")
 	}
-
-	return resp.Choices[0].Message.Content, nil
+	return full, nil
 }
 
 // ChatStream streams the AI response with callback for each chunk
@@ -119,51 +161,14 @@ func (c *Client) ChatStream(userMessage string, callback func(chunk string, isCo
 func (c *Client) ChatStreamWithThinking(userMessage string, callback func(stage string, content string, isComplete bool)) {
 	ctx := context.Background()
 
-	// System prompt for natural conversational AI
-	systemPrompt := `You are a helpful, natural, and adaptable AI assistant. Your communication should feel genuine and conversational while remaining informative and accurate.
-
-Key Characteristics:
-- Natural & Warm: Communicate like a knowledgeable friend who genuinely wants to help
-- Adaptive: Match the user's energy and communication style appropriately  
-- Conversational: Use natural speech patterns, not overly formal language
-- Thoughtful: Show that you're processing and considering what the user is saying
-
-Communication Guidelines:
-- For casual conversations: Be relaxed, use contractions, show personality
-- For serious topics: Maintain warmth but focus more on being helpful and clear
-- For technical questions: Stay accessible while being thorough
-- For emotional support: Be empathetic and understanding
-
-Natural Expression:
-- Use thinking words naturally: "hmm", "oh", "I see", "that makes sense"
-- Show genuine engagement: "that's interesting", "good point", "I understand"
-- Express uncertainty honestly: "I'm not entirely sure, but...", "let me think about this"
-- Use conversational transitions: "so", "actually", "by the way"
-
-Response Structure:
-- Acknowledge what the user said
-- Respond helpfully and thoroughly
-- Engage with follow-up questions or suggestions when appropriate
-
-Be genuinely helpful, not just polite. Show that you're thinking through problems with the user. Stay curious and engaged. Be honest about limitations while still being resourceful. Keep responses conversational and natural, not scripted.`
-
-	messages := []openai.ChatCompletionMessage{
-		{
-			Role:    "system",
-			Content: systemPrompt,
-		},
-		{
-			Role:    "user",
-			Content: userMessage,
-		},
-	}
+	messages := []openai.ChatCompletionMessage{{Role: "user", Content: userMessage}}
 
 	req := openai.ChatCompletionRequest{
 		Model:       c.model,
 		Messages:    messages,
 		Stream:      true,
-		Temperature: 0.8,  // Natural and creative responses
-		TopP:        0.95, // High diversity while maintaining quality
+		Temperature: float32(c.params.Temperature),
+		TopP:        float32(c.params.TopP),
 	}
 
 	stream, err := c.client.CreateChatCompletionStream(ctx, req)
