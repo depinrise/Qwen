@@ -77,7 +77,7 @@ func (c *Client) ChatOmni(ctx context.Context, systemPrompt string, userText str
 	})
 
 	body := map[string]any{
-		"model":    c.model,
+		"model":    c.Model,
 		"messages": messages,
 		"stream":   false,
 	}
@@ -100,12 +100,12 @@ func (c *Client) ChatOmni(ctx context.Context, systemPrompt string, userText str
 		return OmniResponse{}, fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(payload))
 	if err != nil {
 		return OmniResponse{}, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Authorization", "Bearer "+c.APIKey)
 
 	httpClient := &http.Client{Timeout: 60 * time.Second}
 	resp, err := httpClient.Do(req)

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QwenAI Thinking Mode Demo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #34495e;
+        }
+        select, input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .output {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .thinking {
+            color: #e67e22;
+            font-style: italic;
+        }
+        .response {
+            color: #27ae60;
+        }
+        .error {
+            color: #e74c3c;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e8f5e8;
+            border-radius: 5px;
+            border-left: 4px solid #27ae60;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 QwenAI Thinking Mode Demo</h1>
+        
+        <div class="form-group">
+            <label for="mode">Chat Mode:</label>
+            <select id="mode">
+                <option value="auto">Auto-detect (Recommended)</option>
+                <option value="thinking">Thinking Mode</option>
+                <option value="regular">Regular Chat</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="message">Your Message:</label>
+            <input type="text" id="message" placeholder="Ask me anything... (use /think or /no_think to control thinking mode)" />
+        </div>
+        
+        <div class="form-group">
+            <button onclick="sendMessage()" id="sendBtn">Send Message</button>
+            <button onclick="clearOutput()">Clear Output</button>
+            <button onclick="checkStatus()">Check Server Status</button>
+        </div>
+        
+        <div id="status" class="status" style="display: none;"></div>
+        
+        <div class="output" id="output">Welcome to QwenAI Thinking Mode Demo!
+
+This demo shows how the AI thinks through problems before providing answers.
+
+Try asking:
+• "Explain quantum computing"
+• "Solve this math problem: 2x + 5 = 13"
+• "Why is the sky blue?"
+
+Use /think to force thinking mode or /no_think to disable it for specific queries.</div>
+    </div>
+
+    <script>
+        let isProcessing = false;
+
+        async function sendMessage() {
+            if (isProcessing) return;
+            
+            const message = document.getElementById('message').value.trim();
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+
+            const mode = document.getElementById('mode').value;
+            const sendBtn = document.getElementById('sendBtn');
+            const output = document.getElementById('output');
+            
+            isProcessing = true;
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Processing...';
+            
+            // Clear previous output
+            output.innerHTML = '';
+            
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        mode: mode
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.trim()) {
+                            try {
+                                const data = JSON.parse(line);
+                                displayResponse(data);
+                            } catch (e) {
+                                // Skip malformed JSON
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                output.innerHTML += `<span class="error">Error: ${error.message}</span>\n`;
+            } finally {
+                isProcessing = false;
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send Message';
+            }
+        }
+
+        function displayResponse(data) {
+            const output = document.getElementById('output');
+            
+            switch (data.stage) {
+                case 'thinking':
+                    output.innerHTML += `<span class="thinking">🤔 Thinking: ${data.content}</span>`;
+                    break;
+                case 'thinking_complete':
+                    output.innerHTML += '\n\n=== THINKING COMPLETE ===\n\n';
+                    break;
+                case 'streaming':
+                    output.innerHTML += `<span class="response">${data.content}</span>`;
+                    break;
+                case 'tool_call':
+                    output.innerHTML += `\n🔧 ${data.content}\n`;
+                    break;
+                case 'usage':
+                    output.innerHTML += `\n📊 ${data.content}\n`;
+                    break;
+                case 'complete':
+                    output.innerHTML += '\n\n=== RESPONSE COMPLETE ===\n';
+                    break;
+                case 'error':
+                    output.innerHTML += `<span class="error">❌ ${data.content}</span>\n`;
+                    break;
+                default:
+                    output.innerHTML += `${data.content}\n`;
+            }
+            
+            output.scrollTop = output.scrollHeight;
+        }
+
+        async function checkStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                
+                const statusDiv = document.getElementById('status');
+                statusDiv.style.display = 'block';
+                statusDiv.innerHTML = `
+                    <strong>Server Status:</strong><br>
+                    Status: ${data.status}<br>
+                    Model: ${data.model}<br>
+                    Thinking Mode: ${data.thinking_mode ? '✅ Enabled' : '❌ Disabled'}<br>
+                    Base URL: ${data.base_url}
+                `;
+            } catch (error) {
+                const statusDiv = document.getElementById('status');
+                statusDiv.style.display = 'block';
+                statusDiv.innerHTML = `<span class="error">Error checking status: ${error.message}</span>`;
+            }
+        }
+
+        function clearOutput() {
+            document.getElementById('output').innerHTML = 'Output cleared.';
+            document.getElementById('status').style.display = 'none';
+        }
+
+        // Allow Enter key to send message
+        document.getElementById('message').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

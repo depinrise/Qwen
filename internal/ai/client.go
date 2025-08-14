@@ -12,10 +12,12 @@ import (
 
 type Client struct {
 	client  *openai.Client
-	model   string
-	apiKey  string
-	baseURL string
+	Model   string
+	APIKey  string
+	BaseURL string
 	params  ModelParams
+	// Add Qwen thinking client for models that support it
+	qwenThinking *QwenThinkingClient
 }
 
 // ModelParams controls sampling behavior
@@ -23,12 +25,15 @@ type ModelParams struct {
 	Temperature float64 `json:"temperature"`
 	TopK        int     `json:"top_k"`
 	TopP        float64 `json:"top_p"`
+	// Enable thinking mode by default for Qwen models
+	EnableThinking bool `json:"enable_thinking"`
 }
 
 var defaultParams = ModelParams{
-	Temperature: 0.75,
-	TopK:        45,
-	TopP:        0.92,
+	Temperature:    0.75,
+	TopK:           45,
+	TopP:           0.92,
+	EnableThinking: true, // Enable thinking mode by default
 }
 
 type Message struct {
@@ -36,24 +41,56 @@ type Message struct {
 	Content string `json:"content"`
 }
 
+// ThinkingResponse represents the complete thinking process and final response
+type ThinkingResponse struct {
+	ReasoningContent string `json:"reasoning_content"`
+	AnswerContent    string `json:"answer_content"`
+	IsComplete       bool   `json:"is_complete"`
+}
+
+// NewClient creates a new AI client with thinking mode enabled by default
 func NewClient(apiKey, baseURL, model string) *Client {
 	config := openai.DefaultConfig(apiKey)
 	config.BaseURL = baseURL
 
 	client := openai.NewClientWithConfig(config)
 
+	// Initialize Qwen thinking client if using a Qwen model
+	var qwenThinking *QwenThinkingClient
+	if strings.Contains(strings.ToLower(model), "qwen") {
+		qwenThinking = NewQwenThinkingClient(apiKey, baseURL, model)
+	}
+
 	return &Client{
-		client:  client,
-		model:   model,
-		apiKey:  apiKey,
-		baseURL: baseURL,
-		params:  defaultParams,
+		client:       client,
+		Model:        model,
+		APIKey:       apiKey,
+		BaseURL:      baseURL,
+		params:       defaultParams,
+		qwenThinking: qwenThinking,
 	}
 }
 
 // SetParams allows overriding default model params at runtime
 func (c *Client) SetParams(p ModelParams) {
 	c.params = p
+	// Update Qwen thinking client params if it exists
+	if c.qwenThinking != nil {
+		c.qwenThinking.SetParams(p)
+	}
+}
+
+// SetThinkingMode enables or disables thinking mode
+func (c *Client) SetThinkingMode(enabled bool) {
+	c.params.EnableThinking = enabled
+	if c.qwenThinking != nil {
+		c.qwenThinking.SetThinkingMode(enabled)
+	}
+}
+
+// IsQwenModel checks if the current model supports thinking mode
+func (c *Client) IsQwenModel() bool {
+	return c.qwenThinking != nil
 }
 
 func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
@@ -69,7 +106,7 @@ func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
 
 	// Always stream for compatibility and robustness
 	req := openai.ChatCompletionRequest{
-		Model:       c.model,
+		Model:       c.Model,
 		Messages:    openaiMessages,
 		Stream:      true,
 		Temperature: float32(c.params.Temperature),
@@ -118,7 +155,7 @@ func (c *Client) ChatStream(userMessage string, callback func(chunk string, isCo
 	}
 
 	req := openai.ChatCompletionRequest{
-		Model:    c.model,
+		Model:    c.Model,
 		Messages: messages,
 		Stream:   true,
 	}
@@ -159,12 +196,27 @@ func (c *Client) ChatStream(userMessage string, callback func(chunk string, isCo
 
 // ChatStreamWithThinking provides enhanced streaming with actual thinking process
 func (c *Client) ChatStreamWithThinking(userMessage string, callback func(stage string, content string, isComplete bool)) {
+	// If we have a Qwen thinking client, use it for enhanced thinking mode
+	if c.qwenThinking != nil && c.params.EnableThinking {
+		// Convert to QwenMessage format
+		qwenMessages := []QwenMessage{
+			{Role: "user", Content: userMessage},
+		}
+
+		err := c.qwenThinking.ChatWithThinkingStream(context.Background(), qwenMessages, callback)
+		if err != nil {
+			callback("error", fmt.Sprintf("Thinking mode error: %v", err), true)
+		}
+		return
+	}
+
+	// Fallback to regular streaming for non-Qwen models or when thinking is disabled
 	ctx := context.Background()
 
 	messages := []openai.ChatCompletionMessage{{Role: "user", Content: userMessage}}
 
 	req := openai.ChatCompletionRequest{
-		Model:       c.model,
+		Model:       c.Model,
 		Messages:    messages,
 		Stream:      true,
 		Temperature: float32(c.params.Temperature),
@@ -202,4 +254,38 @@ func (c *Client) ChatStreamWithThinking(userMessage string, callback func(stage 
 			}
 		}
 	}
+}
+
+// convertToQwenMessages converts Message slice to QwenMessage slice
+func convertToQwenMessages(messages []Message) []QwenMessage {
+	qwenMessages := make([]QwenMessage, len(messages))
+	for i, msg := range messages {
+		qwenMessages[i] = QwenMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		}
+	}
+	return qwenMessages
+}
+
+// ChatWithThinking provides a complete thinking response with both reasoning and answer
+func (c *Client) ChatWithThinking(ctx context.Context, messages []Message) (*ThinkingResponse, error) {
+	// If we have a Qwen thinking client, use it for enhanced thinking mode
+	if c.qwenThinking != nil && c.params.EnableThinking {
+		// Convert to QwenMessage format
+		qwenMessages := convertToQwenMessages(messages)
+
+		return c.qwenThinking.ChatWithThinking(ctx, qwenMessages)
+	}
+
+	// Fallback to regular chat for non-Qwen models or when thinking is disabled
+	response, err := c.Chat(ctx, messages)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ThinkingResponse{
+		AnswerContent: response,
+		IsComplete:    true,
+	}, nil
 }
